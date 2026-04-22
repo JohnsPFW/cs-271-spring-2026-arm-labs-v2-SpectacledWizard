@@ -1,37 +1,4 @@
-# Lab 04: Pipeline Hazards
-
-## Overview
-
-In this lab, you will explore how a **pipelined processor** executes instructions and learn to identify **data hazards**. This is a critical concept in computer architecture!
-
-**Prerequisites:** Complete Labs 00-03 first!
-
-**Estimated Time:** 60-90 minutes
-
----
-
-## ⚠️ Important: Different Processor!
-
-This lab uses a **PIPELINED** processor, not the single-cycle processor from Labs 00-03!
-
-| Single-Cycle (Labs 00-03) | Pipelined (Lab 04) |
-|--------------------------|-------------------|
-| One instruction at a time | Multiple instructions in-flight |
-| CPI = 1 (but slow clock) | CPI ≈ 1 (with faster clock) |
-| Simple | Complex (hazards!) |
-
----
-
-## Learning Objectives
-
-After completing this lab, you will be able to:
-1. Explain the 5 stages of a pipeline (Fetch, Decode, Execute, Memory, Writeback)
-2. Identify Read-After-Write (RAW) data hazards
-3. Understand how forwarding (bypassing) resolves hazards
-4. Analyze pipeline behavior using waveforms
-5. Calculate CPI (Cycles Per Instruction)
-
----
+# Lab 04: Pipeline Hazard Analysis
 
 ## Background
 
@@ -68,106 +35,183 @@ This is called a **RAW (Read-After-Write) Hazard**.
 | **Forwarding** | Bypass result directly from EX or MEM stage | No penalty (if hardware supports it) |
 | **NOP insertion** | Programmer adds NOPs to wait | Wastes instruction slots |
 
----
+## Overview
 
-## Your Task
+This lab uses the pipelined ARM processor in `Lab4_simple_pipeline` and the
+worksheet in `Lab04_analysis.docx`. Your job is to run the simulation, inspect
+the waveform in Surfer, and complete the analysis questions about a
+read-after-write (RAW) hazard.
 
-### Step 1: Read the Code
+This README matches the current worksheet and should be used alongside
+`Lab04_analysis.docx`.
 
-Open `test_lab04.s` and understand each section:
-- Part 1: Independent instructions (no hazards)
-- Part 2: Simple dependencies
-- Part 3: RAW hazard example
-- Part 4: NOPs for timing
+## Files You Will Use
 
-### Step 2: Run the Simulation
+- `test_lab04.s`
+- `Lab04_analysis.docx`
+- `dump.vcd`
+
+## Prerequisites
+
+- Complete Labs 00-03 first.
+- Start from the `ARM_Codespaces` repo root when running `make sim_lab04`.
+- Make sure the Lab 04 files match the current Week 15 Brightspace version.
+
+## Running the Lab
+
+From the `ARM_Codespaces` repo root:
 
 ```bash
 make sim_lab04
 ```
 
-**Note:** Lab 04 uses a different Makefile target that compiles the pipelined processor.
+Then open `dump.vcd` in Surfer and use the waveform to complete the worksheet.
 
-### Step 3: Analyze Waveforms
+## Surfer Setup
 
-Open `dump.vcd` in Surfer and observe:
-1. When each instruction enters each pipeline stage
-2. How the pipeline handles the X9 dependency
-3. The timing of register writes
+The worksheet refers to the following register signals by their exact names:
 
-### Step 4: Answer the Analysis Questions
+| Register Signal | Meaning |
+|---|---|
+| `test_Educore.educore.register_file.rX00` | `X0` |
+| `test_Educore.educore.register_file.rX01` | `X1` |
+| `test_Educore.educore.register_file.rX02` | `X2` |
+| `test_Educore.educore.register_file.rX03` | `X3` |
+| `test_Educore.educore.register_file.rX04` | `X4` |
+| `test_Educore.educore.register_file.rX05` | `X5` |
+| `test_Educore.educore.register_file.rX06` | `X6` |
+| `test_Educore.educore.register_file.rX07` | `X7` |
+| `test_Educore.educore.register_file.rX09` | `X9` |
+| `test_Educore.educore.register_file.rX10` | `X10` |
+| `test_Educore.educore.register_file.rX11` | `X11` |
+| `test_Educore.educore.register_file.rX12` | `X12` |
 
-The questions are at the bottom of `test_lab04.s`. Write your answers there.
-
----
-
-## Waveform Analysis Guide
-
-### Key Signals to Observe
+For the hazard explanation in Part B, the worksheet also suggests these signals:
 
 | Signal | What It Shows |
-|--------|---------------|
-| `clk` | Clock cycles |
-| `pc` | Program Counter (instruction address) |
-| `IF_instruction` | Instruction in Fetch stage |
-| `ID_instruction` | Instruction in Decode stage |
-| `EX_instruction` | Instruction in Execute stage |
-| `register_file.R[9]` | Value of X9 over time |
+|---|---|
+| `test_Educore.educore.clk` | Clock cycles |
+| `test_Educore.educore.PC` | Program Counter in Fetch |
+| `test_Educore.educore.ID_PC` | Program Counter for Decode-stage instruction |
+| `test_Educore.educore.instruction_memory_v` | Instruction currently being fetched from instruction memory |
+| `test_Educore.educore.instruction` | Instruction currently being decoded |
+| `test_Educore.educore.EX_exec_n` | One Execute-stage operand |
+| `test_Educore.educore.EX_exec_m` | Second Execute-stage operand or immediate |
+| `test_Educore.educore.alu_out` | ALU result in Execute |
+| `test_Educore.educore.WB_write_en` | Whether Writeback writes a register this cycle |
+| `test_Educore.educore.WB_rd_addr` | Which register number is written in Writeback |
+| `test_Educore.educore.WB_ex_out` | Value being written back |
 
-### Counting Cycles
+## Part A: Baseline Register Values
 
-1. Find when the first instruction enters Fetch
-2. Find when YIELD completes Writeback
-3. The difference is total execution cycles
+1. Update the files in `Lab04` with the current Week 15 Brightspace files if
+   needed.
+2. Run:
 
----
+   ```bash
+   make sim_lab04
+   ```
 
-## Analysis Questions
+3. Open `dump.vcd` in Surfer.
+4. Fill in the Part A table in `Lab04_analysis.docx`.
 
-Answer these in `test_lab04.s` or on paper:
+Expected values listed in the worksheet:
 
-1. **Hazard Timing:** In Part 3, how many cycles between when X9 is computed and when X10 uses it?
+| Register | Expected Value |
+|---|---|
+| `X0` | `0xF (15)` |
+| `X1` | `0xE (14)` |
+| `X2` | `0xD (13)` |
+| `X3` | `0xC (12)` |
+| `X4` | `0xB (11)` |
+| `X5` | `0x10 (16)` |
+| `X6` | `0x1B (27)` |
+| `X7` | `0x1 (1)` |
+| `X9` | `0x1B (27)` |
+| `X10` | likely `UNDEF` due to RAW hazard |
+| `X11` | likely `UNDEF` due to RAW hazard |
+| `X12` | likely `UNDEF` due to RAW hazard |
 
-2. **Hazard Resolution:** Does the pipeline stall or forward to handle the RAW hazard?
+## Part B: Insert Two NOPs
 
-3. **Result Values:** What are the final values of X10, X11, and X12?
+In `test_lab04.s`, replace only the code inside Part 3 with:
 
-4. **Without Forwarding:** If the processor didn't have forwarding, how many NOPs would you need between ADD and AND?
+```asm
+_test2:
+    ADD     X9, X1, X2          // X9 = X1 + X2 = 27
+    NOP                         // first NOP command
+    NOP                         // second NOP command
+    AND     X10, X9, X3         // X10 = X9 AND X3
+    ORR     X11, X5, X9         // X11 = X5 OR X9
+    SUB     X12, X9, X7         // X12 = X9 - X7
+```
 
-5. **CPI Calculation:** Count total cycles from _start to YIELD. Divide by number of instructions. What is the CPI?
+Then:
 
----
+1. Rerun `make sim_lab04`.
+2. Open the new `dump.vcd` in Surfer.
+3. Fill in the Part B table in `Lab04_analysis.docx`.
+4. Answer this worksheet question:
 
-## Expected Values
+   Why is `X10` still `UNDEF` while `X11` and `X12` completed?
 
-| Register | Expected Value | Notes |
-|----------|---------------|-------|
-| X0 | 0xF (15) | |
-| X1 | 0xE (14) | |
-| X2 | 0xD (13) | |
-| X3 | 0xC (12) | |
-| X4 | 0xB (11) | |
-| X5 | 0x10 (16) | X0 + 1 |
-| X6 | 0x1B (27) | X1 + X2 |
-| X7 | 0x1 (1) | X0 - X1 |
-| X9 | 0x1B (27) | X1 + X2 |
-| X10 | ? | X9 AND X3 |
-| X11 | ? | X5 OR X9 |
-| X12 | ? | X9 - X7 |
+Expected worksheet guidance for Part B:
 
----
+| Register | Expected Value |
+|---|---|
+| `X9` | `0x1B (27)` |
+| `X10` | likely `UNDEF` due to RAW hazard |
+| `X11` | `x5 = 16` or `x9 = 27` which one? |
+| `X12` | `0x1A (26)` |
 
-## Submission
+## Part C: Insert a Third NOP
+
+In `test_lab04.s`, replace only the code inside Part 3 with:
+
+```asm
+_test2:
+    ADD     X9, X1, X2          // X9 = X1 + X2 = 27
+    NOP                         // first NOP command
+    NOP                         // second NOP command
+    NOP                         // third NOP command
+    AND     X10, X9, X3         // X10 = X9 AND X3
+    ORR     X11, X5, X9         // X11 = X5 OR X9
+    SUB     X12, X9, X7         // X12 = X9 - X7
+```
+
+Then:
+
+1. Rerun `make sim_lab04`.
+2. Open the new `dump.vcd` in Surfer.
+3. Fill in the Part C table in `Lab04_analysis.docx`.
+4. Answer this worksheet question:
+
+   Explain why adding the third `NOP` allowed register `X10` to be updated.
+
+Expected worksheet value for Part C:
+
+| Register | Expected Value |
+|---|---|
+| `X10` | `0x1B (27)` |
+
+## What You Are Turning In
+
+Complete `Lab04_analysis.docx` with your observed values and explanations.
+
+If your instructor asks for a markdown or PDF export in addition to the Word
+file, follow the course submission instructions. The primary analysis document
+for this lab is the Word worksheet in this folder.
+
+## Push Your Work to GitHub
+
+After you finish the worksheet and any required edits in `test_lab04.s`, save
+your work and push it from the `ARM_Codespaces` repo root:
 
 ```bash
 git add .
-git commit -m "Completed Lab 04"
+git commit -m "Complete Lab 04"
 git push
 ```
 
----
-
-## Further Reading
-
-- Patterson & Hennessy, Chapter 4: The Processor
-- ARM Architecture Reference Manual: Pipeline descriptions
+If you already have other unrelated local changes, stage and commit only the
+Lab 04 files required by your instructor.
